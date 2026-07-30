@@ -21,11 +21,11 @@ BASE_DIR = Path(__file__).resolve().parent
 START = 753
 
 TIMEOUT = aiohttp.ClientTimeout(total=45)
-CONCURRENCY_LIMIT = 5
+CONCURRENCY_LIMIT = 15
 RETRY_BASE_DELAY = 3
 
 HIERARCHY_BATCH_SIZE = 5
-BATCH_PAUSE_RANGE = (15, 40)
+BATCH_PAUSE_RANGE = (5, 20)
 
 FAILED_LINKS_FILE = "data/failed_links_batches.csv"
 FAILED_COMPANIES_FILE = "data/failed_companies_batches.csv"
@@ -640,6 +640,7 @@ async def run() -> None:
 
     proxies = [
         "37.187.132.179:58250:236843:236843",
+        "37.187.132.178:23946:236843:236843"
     ]
     
     rotator = ProxyRotator(proxies)
