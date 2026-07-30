@@ -18,10 +18,10 @@ BASE_DIR = Path(__file__).resolve().parent
 # Конфигурация
 # ---------------------------------------------------------------------------
 
-START = 753
+START = 916
 
 TIMEOUT = aiohttp.ClientTimeout(total=45)
-CONCURRENCY_LIMIT = 15
+CONCURRENCY_LIMIT = 3
 RETRY_BASE_DELAY = 3
 
 HIERARCHY_BATCH_SIZE = 5
@@ -640,7 +640,6 @@ async def run() -> None:
 
     proxies = [
         "37.187.132.179:58250:236843:236843",
-        "37.187.132.178:23946:236843:236843"
     ]
     
     rotator = ProxyRotator(proxies)
