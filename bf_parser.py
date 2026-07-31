@@ -18,10 +18,10 @@ BASE_DIR = Path(__file__).resolve().parent
 # Конфигурация
 # ---------------------------------------------------------------------------
 
-START = 946
+START = 949
 
 TIMEOUT = aiohttp.ClientTimeout(total=45)
-CONCURRENCY_LIMIT = 10
+CONCURRENCY_LIMIT = 7
 RETRY_BASE_DELAY = 3
 
 HIERARCHY_BATCH_SIZE = 5
