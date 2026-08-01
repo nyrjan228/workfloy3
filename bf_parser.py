@@ -639,7 +639,7 @@ async def run() -> None:
     print(f"Загружено {len(hierarchy_rows)} Industry URL, разбито на {len(batches)} батчей по {HIERARCHY_BATCH_SIZE}.")
 
     proxies = [
-        "51.15.26.202:20078:236843:236843"
+        "37.187.132.179:64737:236843:236843"
     ]
     
     rotator = ProxyRotator(proxies)
