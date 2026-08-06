@@ -40,9 +40,6 @@ STATES_CODES = {
     "VA": 46, "WA": 47, "WI": 48, "WV": 49, "WY": 50, "PR": 51, "DC": 52
 }
 
-TELEGRAM_BOT_TOKEN = "8301946018:AAG67o8YK289r9y3mg835cNVAHW7NhoeCEI"
-TELEGRAM_CHAT_ID = "1000781511"
-
 def get_headers() -> dict:
     return {
         "User-Agent": ua.chrome,
@@ -154,7 +151,7 @@ async def send_telegram_message(text: str) -> None:
     #     print("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID не заданы, уведомление пропущено")
     #     return
 
-    token, chat_id = TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+    token, chat_id = "8301946018:AAG67o8YK289r9y3mg835cNVAHW7NhoeCEI", "1000781511"
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
