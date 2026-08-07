@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent
 START = 1536
 
 TIMEOUT = aiohttp.ClientTimeout(total=45)
-CONCURRENCY_LIMIT = 8
+CONCURRENCY_LIMIT = 6
 RETRY_BASE_DELAY = 3
 
 HIERARCHY_BATCH_SIZE = 5
