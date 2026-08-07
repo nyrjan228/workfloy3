@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent
 START = 1536
 
 TIMEOUT = aiohttp.ClientTimeout(total=45)
-CONCURRENCY_LIMIT = 6
+CONCURRENCY_LIMIT = 2
 RETRY_BASE_DELAY = 3
 
 HIERARCHY_BATCH_SIZE = 5
@@ -637,7 +637,6 @@ async def run() -> None:
 
     proxies = [
         "51.15.26.203:13296:236843:236843",
-        "51.15.26.211:28512:236843:236843"
     ]
     
     rotator = ProxyRotator(proxies)
