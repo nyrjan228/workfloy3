@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 # Конфигурация
 # ---------------------------------------------------------------------------
 
-START = 1932
+START = 0
 
 TIMEOUT = aiohttp.ClientTimeout(total=45)
 CONCURRENCY_LIMIT = 6
@@ -30,7 +30,7 @@ BATCH_PAUSE_RANGE = (5, 15)
 FAILED_LINKS_FILE = "data/failed_links_batches.csv"
 FAILED_COMPANIES_FILE = "data/failed_companies_batches.csv"
 COMPANIES_FILE = "data/companies.csv"
-HIERARCHY_FILE = "data/merged.csv"
+HIERARCHY_FILE = "data/failed_links_batches1.csv"
 
 STATES_CODES = {
     "AL": 1, "AK": 2, "AZ": 3, "AR": 4, "CA": 5, "CO": 6, "CT": 7, "DE": 8, "FL": 9, "GA": 10, "HI": 11, "ID": 12,
@@ -636,8 +636,7 @@ async def run() -> None:
     print(f"Загружено {len(hierarchy_rows)} Industry URL, разбито на {len(batches)} батчей по {HIERARCHY_BATCH_SIZE}.")
 
     proxies = [
-        "51.15.26.202:18585:236843:236843",
-        "37.187.132.178:60700:236843:236843"
+        "37.187.132.179:39730:236843:236843",
     ]
     
     rotator = ProxyRotator(proxies)
