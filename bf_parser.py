@@ -1,8 +1,6 @@
 import asyncio
 import csv
-import os
 import random as rd
-import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -14,31 +12,21 @@ ua = UserAgent()
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# ---------------------------------------------------------------------------
-# Конфигурация
-# ---------------------------------------------------------------------------
-
 START = 0
 
 TIMEOUT = aiohttp.ClientTimeout(total=45)
 CONCURRENCY_LIMIT = 6
 RETRY_BASE_DELAY = 3
 
-HIERARCHY_BATCH_SIZE = 5
+BATCH_SIZE = 1000
 BATCH_PAUSE_RANGE = (5, 15)
 
-FAILED_LINKS_FILE = "data/failed_links_batches.csv"
-FAILED_COMPANIES_FILE = "data/failed_companies_batches.csv"
 COMPANIES_FILE = "data/companies.csv"
-HIERARCHY_FILE = "data/failed_links_batches1.csv"
+FAILED_COMPANIES = "data/failed_companies_batches_new.csv"
+FAILED_COMPANIES_FILE = "data/failed_companies_batches.csv"
 
-STATES_CODES = {
-    "AL": 1, "AK": 2, "AZ": 3, "AR": 4, "CA": 5, "CO": 6, "CT": 7, "DE": 8, "FL": 9, "GA": 10, "HI": 11, "ID": 12,
-    "IL": 13, "IN": 14, "IA": 15, "KS": 16, "KY": 17, "LA": 18, "ME": 19, "MD": 20, "MA": 21, "MI": 22, "MN": 23,
-    "MS": 24, "MO": 25, "MP": 26, "NE": 27, "NV": 28, "NH": 29, "NJ": 30, "NM": 31, "NY": 32, "NC": 33, "ND": 34,
-    "OH": 35, "OK": 36, "OR": 37, "PA": 38, "RI": 39, "SC": 40, "SD": 41, "TN": 42, "TX": 43, "UT": 44, "VT": 45,
-    "VA": 46, "WA": 47, "WI": 48, "WV": 49, "WY": 50, "PR": 51, "DC": 52
-}
+TOKEN, CHAT_ID = "8301946018:AAG67o8YK289r9y3mg835cNVAHW7NhoeCEI", "1000781511"
+
 
 def get_headers() -> dict:
     return {
@@ -53,10 +41,6 @@ def get_headers() -> dict:
         "DNT": "1",
     }
 
-
-# ---------------------------------------------------------------------------
-# Модели
-# ---------------------------------------------------------------------------
 
 @dataclass
 class Filters:
@@ -88,10 +72,6 @@ COMPANY_FIELDNAMES = [
 ]
 CSV_DELIMITER = ";"
 
-
-# ---------------------------------------------------------------------------
-# Companies repo (сохранение результатов)
-# ---------------------------------------------------------------------------
 
 def _companies_path() -> Path:
     return BASE_DIR / COMPANIES_FILE
@@ -136,25 +116,10 @@ def save_companies(data: list[Company], start_id: int) -> tuple[Path, int]:
 
     return file_path, current_id
 
-# ---------------------------------------------------------------------------
-# Telegram
-# ---------------------------------------------------------------------------
-def _telegram_creds() -> tuple[str | None, str | None]:
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    return token, chat_id
-
 
 async def send_telegram_message(text: str) -> None:
-    # token, chat_id = _telegram_creds()
-    # if not token or not chat_id:
-    #     print("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID не заданы, уведомление пропущено")
-    #     return
-
-    token, chat_id = "8301946018:AAG67o8YK289r9y3mg835cNVAHW7NhoeCEI", "1000781511"
-
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -167,21 +132,16 @@ async def send_telegram_message(text: str) -> None:
 
 
 async def send_telegram_document(file_path: Path, caption: str = "") -> None:
-    token, chat_id = _telegram_creds()
-    if not token or not chat_id:
-        print("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID не заданы, файл не отправлен")
-        return
-
     if not file_path.exists() or file_path.stat().st_size == 0:
         return
 
-    url = f"https://api.telegram.org/bot{token}/sendDocument"
+    url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
 
     try:
         async with aiohttp.ClientSession() as session:
             with open(file_path, "rb") as f:
                 form = aiohttp.FormData()
-                form.add_field("chat_id", chat_id)
+                form.add_field("chat_id", CHAT_ID)
                 if caption:
                     form.add_field("caption", caption)
                 form.add_field("document", f, filename=file_path.name)
@@ -200,7 +160,6 @@ async def send_results(caption: str) -> None:
     """Отправляет все накопленные файлы результатов в Telegram и удаляет их с диска"""
     files = [
         BASE_DIR / COMPANIES_FILE,
-        BASE_DIR / FAILED_LINKS_FILE,
         BASE_DIR / FAILED_COMPANIES_FILE,
     ]
 
@@ -210,11 +169,6 @@ async def send_results(caption: str) -> None:
         if file_path.exists() and file_path.stat().st_size > 0:
             await send_telegram_document(file_path, caption=file_path.name)
 
-
-
-# ---------------------------------------------------------------------------
-# Прокси-ротатор
-# ---------------------------------------------------------------------------
 
 class AllProxiesExhaustedError(Exception):
     """Все прокси из пула оказались нерабочими"""
@@ -306,6 +260,7 @@ class ProxyRequester:
                 return status, text
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 last_exc = exc
+
                 print(f"Проблема с прокси {proxy}, пробуем другой...")
 
                 try:
@@ -325,103 +280,6 @@ class ProxyRequester:
         lowered = text.lower()
         return any(marker in lowered for marker in cls.BLOCK_MARKERS)
 
-
-# ---------------------------------------------------------------------------
-# Сбор ссылок на компании
-# ---------------------------------------------------------------------------
-
-def _add_state_to_url(url: str, state_code: str) -> str:
-    state_id = STATES_CODES.get(state_code)
-    state_part = f"StateId--{state_id}"
-
-    if "parameter=" in url:
-        if state_part in url:
-            return url
-        return url.replace("parameter=", f"parameter={state_part}%2B")
-
-    separator = "?" if "?" not in url else "&"
-    return f"{url}{separator}parameter={state_part}"
-
-
-async def _fetch_state_companies(requester: ProxyRequester, url: str, filters: Filters) -> list[str]:
-    status, text = await requester.get_text(url)
-
-    if status == 500:
-        return []
-
-    soup = BeautifulSoup(text, "lxml")
-
-    tbody = soup.select_one("table#companyList > tbody")
-    if tbody is None:
-        return []
-
-    companies = []
-
-    for row in tbody.find_all("tr"):
-        cells = row.find_all("td")
-        if len(cells) != 10:
-            continue
-
-        revenue_text = cells[-2].get_text(strip=True).replace(",", "").lower()
-        revenue = None if revenue_text == "n/a" else int(revenue_text)
-
-        if filters.min_revenue != 0 and filters.max_revenue != 0:
-            if revenue is None:
-                continue
-            if not (filters.min_revenue <= revenue <= filters.max_revenue):
-                continue
-
-        if filters.company_name_words:
-            company_words = set(re.findall(r"\w+", cells[1].get_text().lower()))
-            filter_words = {w.lower() for w in filters.company_name_words}
-            if company_words.isdisjoint(filter_words):
-                continue
-
-        link_tag = cells[1].find("a")
-        if not link_tag:
-            continue
-
-        companies.append(f"https://www.buzzfile.com{link_tag['href']}")
-
-    return companies
-
-
-async def get_company_links(
-        rotator: ProxyRotator,
-        hierarchy_rows: list[tuple[str, str, str]],
-        filters: Filters,
-        semaphore: asyncio.Semaphore,
-) -> list[tuple[str, str, str]]:
-    states = filters.states if filters.states else list(STATES_CODES.keys())
-    url_tasks = []
-
-    for sector, category, category_url in hierarchy_rows:
-        for state in states:
-            if state not in STATES_CODES:
-                print(f"Штат '{state}' не найден в списке")
-                continue
-            url_tasks.append((_add_state_to_url(category_url, state), sector, category))
-
-    print(
-        f"Сбор ссылок на компании: {len(hierarchy_rows)} Industry URL x {len(states)} штатов = {len(url_tasks)} запросов")
-
-    async with aiohttp.ClientSession(headers=get_headers(), timeout=TIMEOUT) as session:
-        requester = ProxyRequester(session, rotator, semaphore=semaphore)
-        tasks = [_fetch_state_companies(requester, url, filters) for url, _, _ in url_tasks]
-        results = await asyncio.gather(*tasks)
-
-        links = []
-        for (_, sector, category), company_urls in zip(url_tasks, results):
-            for company_url in company_urls:
-                links.append((company_url, sector, category))
-
-        print(f"Найдено ссылок на компании: {len(links)}")
-        return links
-
-
-# ---------------------------------------------------------------------------
-# Парсинг страницы компании
-# ---------------------------------------------------------------------------
 
 def _text_or_empty(node: Tag | None) -> str:
     return node.get_text(strip=True) if node else ""
@@ -557,9 +415,10 @@ async def get_companies_data(
 
     async with aiohttp.ClientSession(headers=get_headers(), timeout=TIMEOUT) as session:
         requester = ProxyRequester(session, rotator, semaphore=semaphore)
+
         tasks = [
             _parse_company_page(requester, url, sector, category)
-            for url, sector, category in company_links
+            for sector, category, url in company_links
         ]
         results = await asyncio.gather(*tasks)
 
@@ -570,12 +429,8 @@ async def get_companies_data(
     return filtered
 
 
-# ---------------------------------------------------------------------------
-# Иерархия и батчи
-# ---------------------------------------------------------------------------
-
 def load_hierarchy() -> list[tuple[str, str, str]]:
-    file_path = BASE_DIR / HIERARCHY_FILE
+    file_path = BASE_DIR / FAILED_COMPANIES
     if not file_path.exists():
         return []
 
@@ -610,10 +465,22 @@ def _append_failed_rows(filename: str, header: list[str], rows: list[tuple[str, 
         writer.writerows(rows)
 
 
-def log_failed_links_batch(batch_rows: list[tuple[str, str, str]]) -> None:
-    rows = [(sector, category, url) for sector, category, url in batch_rows]
-    print(f"Сохранено ссылок: {rows}")
-    _append_failed_rows(FAILED_LINKS_FILE, ["Sector", "Category", "Industry URL"], rows)
+def load_failed_companies_link():
+    file_path = BASE_DIR / FAILED_COMPANIES
+    if not file_path.exists():
+        return []
+
+    rows = []
+    with open(file_path, newline="", encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            sector = (row.get("Sector") or "").strip()
+            category = (row.get("Category") or "").strip()
+            url = (row.get("Company URL") or "").strip()
+            if url:
+                rows.append((sector, category, url))
+
+    print(f"Прочитано {len(rows)} строк из {file_path}")
+    return rows
 
 
 def log_failed_companies_batch(company_links: list[tuple[str, str, str]]) -> None:
@@ -621,29 +488,29 @@ def log_failed_companies_batch(company_links: list[tuple[str, str, str]]) -> Non
     print(f"Сохранено компаний: {rows}")
     _append_failed_rows(FAILED_COMPANIES_FILE, ["Sector", "Category", "Company URL"], rows)
 
-# ---------------------------------------------------------------------------
-# Основной цикл
-# ---------------------------------------------------------------------------
 
 async def run() -> None:
-    hierarchy_rows = load_hierarchy()
-    if not hierarchy_rows:
-        print(f"Файл {HIERARCHY_FILE} не найден или пуст.")
-        await send_telegram_message(f"⚠️ Парсер buzzfile: файл {HIERARCHY_FILE} не найден или пуст.")
+    failed_companies_links = load_failed_companies_link()
+    if not failed_companies_links:
+        print(f"Файл {FAILED_COMPANIES} не найден или пуст.")
+        await send_telegram_message(f"⚠️ Парсер buzzfile: файл {FAILED_COMPANIES} не найден или пуст.")
         return
 
-    batches = list(_chunked(hierarchy_rows, HIERARCHY_BATCH_SIZE))
-    print(f"Загружено {len(hierarchy_rows)} Industry URL, разбито на {len(batches)} батчей по {HIERARCHY_BATCH_SIZE}.")
+    batches = list(_chunked(failed_companies_links, BATCH_SIZE))
+    print(
+        f"Загружено {len(failed_companies_links)} Company URL, разбито на {len(batches)} батчей по {BATCH_SIZE}."
+    )
 
     proxies = [
-        "37.187.132.179:39730:236843:236843",
+        "34.132.128.99:62929:236843:236843",
+        "173.201.38.181:24116:236843:236843"
     ]
-    
+
     rotator = ProxyRotator(proxies)
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     filters = Filters()
 
-    for file_path in [BASE_DIR / COMPANIES_FILE, BASE_DIR / FAILED_LINKS_FILE, BASE_DIR / FAILED_COMPANIES_FILE]:
+    for file_path in [BASE_DIR / COMPANIES_FILE, BASE_DIR / FAILED_COMPANIES_FILE]:
         if file_path.exists() and file_path.stat().st_size > 0:
             try:
                 file_path.unlink()
@@ -669,31 +536,10 @@ async def run() -> None:
         rotator.reset_bad()
 
         try:
-            company_links = await get_company_links(rotator, batch_rows, filters, semaphore)
-        except AllProxiesExhaustedError:
-            print(f"Батч {batch_num + 1}: все прокси исчерпаны на сборе ссылок.")
-            log_failed_links_batch(batch_rows)
-            await send_results(
-                f"🛑 Прокси исчерпаны на батче {batch_num + 1}/{len(batches)} (сбор ссылок).\n"
-                f"Сохранено компаний за этот запуск: {total_saved}.\n"
-                f"Последний полностью обработанный батч: {last_completed_batch + 1}.\n"
-                f"Чтобы продолжить основной парсинг: "
-                f"замените прокси, укажите START = {batch_num + 1} и запустите заново.\n"
-                f"Необработанный батч уже сохранён в {FAILED_LINKS_FILE} "
-                f"и может быть обработан отдельным скриптом."
-            )
-            return
-        except Exception as e:
-            print(f"Батч {batch_num + 1}: ошибка сбора ссылок ({e}). Записал в {FAILED_LINKS_FILE}, иду дальше.")
-            log_failed_links_batch(batch_rows)
-            last_completed_batch = batch_num
-            continue
-
-        try:
-            companies_data = await get_companies_data(rotator, company_links, filters, semaphore)
+            companies_data = await get_companies_data(rotator, batch_rows, filters, semaphore)
         except AllProxiesExhaustedError:
             print(f"Батч {batch_num + 1}: все прокси исчерпаны на обработке компаний.")
-            log_failed_companies_batch(company_links)
+            log_failed_companies_batch(batch_rows)
             await send_results(
                 f"🛑 Прокси исчерпаны на батче {batch_num + 1}/{len(batches)} (обработка компаний).\n"
                 f"Сохранено компаний за этот запуск: {total_saved}.\n"
@@ -705,8 +551,10 @@ async def run() -> None:
             )
             return
         except Exception as e:
-            print(f"Батч {batch_num + 1}: ошибка обработки компаний ({e}). Записал в {FAILED_COMPANIES_FILE}, иду дальше.")
-            log_failed_companies_batch(company_links)
+            print(
+                f"Батч {batch_num + 1}: ошибка обработки компаний ({e}). Записал в {FAILED_COMPANIES_FILE}, иду дальше."
+            )
+            log_failed_companies_batch(batch_rows)
             last_completed_batch = batch_num
             continue
 
@@ -731,10 +579,6 @@ async def run() -> None:
     )
     print(msg)
     await send_results(msg)
-
-
-def main() -> None:
-    asyncio.run(run())
 
 
 if __name__ == "__main__":
