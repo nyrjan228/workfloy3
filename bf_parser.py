@@ -22,7 +22,7 @@ BATCH_SIZE = 1000
 BATCH_PAUSE_RANGE = (5, 15)
 
 COMPANIES_FILE = "data/companies.csv"
-FAILED_COMPANIES = "bf/failed_companies_batches/failed_companies_batches_new.csv"
+FAILED_COMPANIES = "data/failed_companies_batches_new.csv"
 FAILED_COMPANIES_FILE = "data/failed_companies_batches.csv"
 
 TOKEN, CHAT_ID = "8301946018:AAG67o8YK289r9y3mg835cNVAHW7NhoeCEI", "1000781511"
