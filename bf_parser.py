@@ -12,7 +12,7 @@ ua = UserAgent()
 
 BASE_DIR = Path(__file__).resolve().parent
 
-START = 0
+START = 140
 
 TIMEOUT = aiohttp.ClientTimeout(total=45)
 CONCURRENCY_LIMIT = 6
@@ -502,8 +502,8 @@ async def run() -> None:
     )
 
     proxies = [
-        "34.132.128.99:62929:236843:236843",
-        "173.201.38.181:24116:236843:236843"
+        "37.187.132.179:58875:236843:236843",
+        "34.68.187.1:53153:236843:236843"
     ]
 
     rotator = ProxyRotator(proxies)
